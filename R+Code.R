@@ -99,6 +99,11 @@ table(badmahal)
 total = badmahal + badcooks + badlaverage
 noout = subset(dat1, total < 1)
 
+## factor categorical data
+noout$time_window = factor(noout$time_window)
+noout$weekday = factor(noout$weekday)
+str(noout)
+
 ## revised model.
 model2 = lm(fare ~ . ,data=noout)
 summary(model2, correlation = TRUE)

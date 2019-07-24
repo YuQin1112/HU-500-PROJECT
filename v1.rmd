@@ -187,6 +187,10 @@ noout = subset(dat1, total < 1)
 ## Derive revised model and show summary
 
 ```{r}
+## factor categorical data
+noout$time_window = factor(noout$time_window)
+noout$weekday = factor(noout$weekday)
+
 model2 = lm(fare ~ . ,data=noout)
 summary(model2, correlation = TRUE)
 ```
