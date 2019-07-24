@@ -1,0 +1,183 @@
+---
+title: "Final project R code"
+author: "Yu Qin, "
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import library and data
+
+```{r}
+library(readr)
+library(sqldf)
+library(ggplot2)
+library(sp)
+library(rgdal)
+library(geosphere)
+
+data0 <- read_csv("E:/hu500/HU500/pre-process/real_data.csv")
+
+### Data to begin, create a copy
+dat0 = data0
+```
+
+## Remove outlier 1: by human knowledge
+
+### remove invalid coordinates.
+
+```{r}
+dat0$distance[dat0$distance <= 0] = NA
+dat0$pickup_long[dat0$pickup_long == 0] = NA
+dat0$pickup_lat[dat0$pickup_lat == 0] = NA
+dat0$dropoff_long[dat0$dropoff_long == 0] = NA
+dat0$dropoff_lat[dat0$dropoff_lat == 0] = NA
+
+dat0$pickup_long[abs(dat0$pickup_long) > 180] = NA
+dat0$pickup_lat[abs(dat0$pickup_lat) > 90] = NA
+dat0$dropoff_long[abs(dat0$dropoff_long) > 180] = NA
+dat0$dropoff_lat[abs(dat0$dropoff_lat) > 90] = NA
+```
+
+### remove coordinates that outside of NYC
+
+```{r}
+dat0$pickup_long[dat0$pickup_long < -100] = NA
+dat0$pickup_long[dat0$pickup_long > -50] = NA
+dat0$pickup_lat[dat0$pickup_lat < 20] = NA
+dat0$pickup_lat[dat0$pickup_lat > 60] = NA
+
+dat0$dropoff_long[dat0$dropoff_long < -100] = NA
+dat0$dropoff_long[dat0$dropoff_long > -50] = NA
+dat0$dropoff_lat[dat0$dropoff_lat < 20] = NA
+dat0$dropoff_lat[dat0$dropoff_lat > 60] = NA
+```
+
+### remove those invalid columns
+
+```{r}
+no_miss <- dat0[complete.cases(dat0), ]
+summary(no_miss)
+```
+
+### Kmean cluster coords (lat, long)
+
+We want to group `pick up location` and `dropoff location` into different areas, and use Kmean algorithm to automatically divide our data into 5 clusters which represent Manhattan, Brooklyn, Flushing, Long Island and Queen. 
+
+We skip this step since cluster algorithm requires lots of memory and our computer does not support that.
+
+A MapReduce mechanism in a distributed system (such as AWS) is a good solution. It is yet to be improved. 
+
+Here is the code we skipped:
+
+```{r}
+dist = function(df) {
+  require(geosphere)
+  d <- function(i,z){
+    dist <- rep(0,nrow(z))
+    dist[i:nrow(z)] <- distHaversine(z[i:nrow(z),1:2],z[i,1:2])
+    return(dist)
+  }
+  dm <- do.call(cbind,lapply(1:nrow(df),d,df))
+  return(as.dist(dm))
+}
+
+# FAILED ON WOODEN PC FOR MEMORY INEFFICIENT
+# only_coord <- no_miss[,c(4,5)]
+# km <- kmeans(dist(only_coord),centers=5)
+# hc <- hclust(dist(only_coord))  # ALTERNINATIVE CLUSTER METHOD
+```
+
+## Remove outlier 2: by cutoffs
+
+### take out irralevent columns
+
+take out columns: 
+
+- index      : provide no information. 
+- timestamp  : time is covered and better concluded buy `time_window`.
+- coordinates: since we cannot process 500k entrys of data. 
+
+```{r}
+dat1 = no_miss[,-c(1,3,4,5,6,7)]
+K = 5
+N = nrow(dat1)
+model1 = lm(fare ~ . ,data=dat1)
+```
+
+### laverage cutoff
+
+```{r}
+leverage = hatvalues(model1)
+cutleverage = (2*K + 2) / N
+badlaverage = as.numeric(leverage > cutleverage)
+table(badlaverage)
+```
+
+
+### cook cutoff
+
+```{r}
+cooks = cooks.distance(model1)
+cutcook = 4 / (N-K-1)
+badcooks = as.numeric(cooks > cutcook)
+table(badcooks)
+```
+
+### mahalnobis cutoff
+
+```{r}
+mahal = mahalanobis(
+  dat1,
+  colMeans(dat1, na.rm=TRUE),
+  cov(dat1, use="pairwise.complete.obs")
+)
+cutmahal = qchisq(1-.001,ncol(dat1))
+badmahal = as.numeric(mahal > cutmahal)
+table(badmahal)
+```
+
+### remove outlier 2
+
+```{r}
+total = badmahal + badcooks + badlaverage
+noout = subset(dat1, total < 1)
+```
+
+
+## Derive revised model and show summary
+
+```{r}
+model2 = lm(fare ~ . ,data=noout)
+summary(model2, correlation = TRUE)
+```
+
+
+## Data screening
+
+### linearity
+
+```{r}
+standardized = rstudent(model2)
+fitted = scale(model2$fitted.values)
+qqnorm(standardized)
+abline(0,1)
+```
+
+### normality
+```{r}
+hist(standardized, breaks = 1000)
+```
+
+### homogeneous
+```{r}
+plot(fitted)
+abline(0,0)
+abline(v = 0)
+```
+
+
+
