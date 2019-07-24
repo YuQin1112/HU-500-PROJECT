@@ -9,6 +9,42 @@ output: word_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## pre-process
+
+Before we jump into data anyalyze, we did a pre-process of the raw data. we factor out some new data columns that will help our modeling:
+
+- time window: a number ranged from [1:4] that represents peroid of time in a day:
+
+```
+- 1: 22:00 - 6:00. night and before morning
+- 2: 6:00 - 10:00. early summit of go to work
+- 3: 10:00 - 18:00. daytime
+- 4: 18:00 - 22:00. evening
+```
+
+- weekday: a number ranged in [1:7] to represenct Monday to Sunday.
+- distance: distance between pickup location and dropoff location.
+
+Since the input data is too big and R package readr doesn't offer a way to read data by small chunk, we use python code to do the pre-process and you can find it [here](https://github.com/YuQin1112/HU-500-PROJECT/blob/master/pre-process/prepare_data.py). 
+
+the new data columns after pre-process define as:
+
+
+|column name|type|description|
+|--|--|--|
+|fare|float|money paid on this ride|
+|pickup_ts|int|unix timestamp of the pickup time|
+|pickup_long|float|pickup longtitude|
+|pickup_lat|float|pickup latitude|
+|dropoff_long|float|dropoff longtitude|
+|dropoff_lat|float|dropoff lattitude|
+|passenger_count|int|number of passenger|
+|time_window|int|time in range of 4 partitions in a day|
+|weekday|int|Monday to Sunday as number 1 to 7|
+|distance|float|distance in mile between pickup and fropoff|
+
+
+
 ## Import library and data
 
 ```{r}
